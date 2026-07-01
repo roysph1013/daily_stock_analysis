@@ -780,6 +780,47 @@ class YfinanceFetcher(BaseFetcher):
             logger.warning(f"[Yfinance] 获取美股指数 {user_code} 实时行情失败: {e}")
             return None
 
+    def get_stock_name(self, stock_code: str) -> Optional[str]:
+        """
+        获取股票中文/英文名称（美股 + 日韩台 suffix-only 代码）
+
+        独立于 get_realtime_quote 的名称解析路径：即使实时行情因限流/网络问题
+        暂时失败，只要 yfinance ticker.info 可用，仍然能解析出名称。这条路径
+        主要用于补齐 A股专属数据源（Efinance/Tencent/Akshare/Pytdx/Baostock）
+        完全不认识的市场（如台股 .TW/.TWO、日股 .T、韩股 .KS/.KQ）的名称缺口。
+
+        Args:
+            stock_code: 股票代码，如 '2330.TW', '0050.TWO', 'AAPL', '7203.T'
+
+        Returns:
+            股票名称，获取失败返回 None
+        """
+        if not (
+            self._is_us_stock(stock_code)
+            or self._is_jp_kr_suffix_stock(stock_code)
+            or self._is_tw_suffix_stock(stock_code)
+        ):
+            return None
+
+        try:
+            import yfinance as yf
+
+            symbol = self._convert_stock_code(stock_code)
+            ticker = yf.Ticker(symbol)
+            try:
+                ticker_info = ticker.info or {}
+            except Exception as e:
+                logger.debug(f"[Yfinance] {symbol} ticker.info 获取失败: {e}")
+                return None
+            name = ticker_info.get('shortName', '') or ticker_info.get('longName', '') or ''
+            if name:
+                logger.debug(f"[Yfinance] {symbol} 名称解析成功: {name}")
+                return name
+            return None
+        except Exception as e:
+            logger.debug(f"[Yfinance] {stock_code} 名称解析失败: {e}")
+            return None
+
     def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
         获取美股/美股指数实时行情数据
