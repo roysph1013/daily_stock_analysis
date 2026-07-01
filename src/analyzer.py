@@ -3947,7 +3947,8 @@ class GeminiAnalyzer:
 
 请为 **{stock_name}({code})** 生成【决策仪表盘】，严格按照 JSON 格式输出。
 """
-    asset_type = context.get('asset_type', 'stock')
+
+asset_type = context.get('asset_type', 'stock')
         if asset_type == 'market_cap_etf':
             prompt += """
 > ⚠️ **市值型 ETF 分析约束**：该标的为市值型指数 ETF，属于长期核心持仓，不做短线择时。
@@ -3974,6 +3975,8 @@ class GeminiAnalyzer:
 > - 若新闻中缺乏利率政策相关资讯，必须明确说明「利率环境资讯不足，仅依据价格与殖利率趋势判断」
 > - `risk_alerts` 只能是利率/信用风险相关内容，严禁出现个股式的公司经营风险
 """
+        elif context.get('is_index_etf'):
+        
         elif context.get('is_index_etf'):
             prompt += """
 > ⚠️ **指数/ETF 分析约束**：该标的为指数跟踪型 ETF 或市场指数。
