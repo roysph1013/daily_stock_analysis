@@ -119,6 +119,11 @@ class YfinanceFetcher(BaseFetcher):
         """
         code = stock_code.strip().upper()
 
+        # 🟢 新增：如果是台股上市或上櫃代號，直接原樣返回，不准往下走陸股轉換邏輯！
+        if code.endswith('.TW') or code.endswith('.TWO'):
+            logger.debug(f"成功攔截台灣股市代碼: {code}")
+            return code
+
         # 美股指数：映射到 Yahoo Finance 符号（如 SPX -> ^GSPC）
         yf_symbol, _ = get_us_index_yf_symbol(code)
         if yf_symbol:
