@@ -1038,7 +1038,14 @@ class StockAnalysisPipeline:
         enhanced['is_index_etf'] = SearchService.is_index_or_etf(
             context.get('code', ''), enhanced.get('stock_name', stock_name)
         )
+        # Manual asset-type classification (market_cap_etf / dividend_etf / bond_etf
+        # / stock), additive on top of is_index_etf. Untagged codes keep today's
+        # behavior: see src/services/asset_type_service.py for the fallback rule.
+        from src.services.asset_type_service import get_asset_type
 
+        enhanced['asset_type'] = get_asset_type(
+            context.get('code', ''), enhanced.get('stock_name', stock_name)
+        )
         # P0: append unified fundamental block; keep as additional context only
         enhanced["fundamental_context"] = (
             fundamental_context
