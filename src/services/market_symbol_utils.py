@@ -19,6 +19,10 @@ class SuffixMarketSpec:
     market: str
     suffixes: tuple[str, ...]
     digit_lengths: tuple[int, ...]
+    # When True, the base code may end with exactly one trailing uppercase
+    # letter after the digit run (e.g. Taiwan bond ETFs like 00720B/00751B).
+    # The digit_lengths check still applies to the numeric portion only.
+    allow_trailing_letter: bool = False
 
 
 _SUFFIX_MARKET_SPECS: tuple[SuffixMarketSpec, ...] = (
@@ -26,7 +30,9 @@ _SUFFIX_MARKET_SPECS: tuple[SuffixMarketSpec, ...] = (
     SuffixMarketSpec("kr", ("KS", "KQ"), (6,)),
     # Taiwan support mirrors the same suffix-only pattern; keep it here so the
     # shared helpers stay complete for all yfinance-only offshore markets.
-    SuffixMarketSpec("tw", ("TW", "TWO"), (4, 5, 6)),
+    # allow_trailing_letter covers Taiwan bond ETF codes such as 00720B/00751B,
+    # which end with a single letter (commonly 'B' for bond) after the digits.
+    SuffixMarketSpec("tw", ("TW", "TWO"), (4, 5, 6), allow_trailing_letter=True),
 )
 
 _MARKET_TO_SPEC = {spec.market: spec for spec in _SUFFIX_MARKET_SPECS}
@@ -59,7 +65,10 @@ def get_suffix_market(stock_code: str) -> Optional[str]:
     spec = _SUFFIX_TO_SPEC.get(suffix)
     if spec is None:
         return None
-    if not (base.isdigit() and len(base) in spec.digit_lengths):
+    digit_part = base
+    if spec.allow_trailing_letter and base and base[-1].isalpha():
+        digit_part = base[:-1]
+    if not (digit_part.isdigit() and len(digit_part) in spec.digit_lengths):
         return None
     return spec.market
 
