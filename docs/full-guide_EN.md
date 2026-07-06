@@ -143,7 +143,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 
 | Secret Name | Description | Required |
 |------------|------|:----:|
-| `STOCK_LIST` | Watchlist codes, e.g., `600519,300750,002594,7203.T,005930.KS` | ✅ |
+| `STOCK_LIST` | Watchlist codes, e.g., `600519,300750,002594,7203.T,005930.KS`; English commas are recommended, while pasted Chinese commas, enumeration commas, semicolons, spaces, and newlines are recognized and normalized to English commas | ✅ |
 | `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/) optimized for Chinese content; the same key can also be used for Anspire LLM fallback scenarios (example model: `Doubao-Seed-2.0-lite`) | Recommended |
 | `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis) search-engine results for realtime financial news | Recommended |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) Search API (for news search) | Optional |
@@ -154,6 +154,8 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | `SEARXNG_PUBLIC_INSTANCES_ENABLED` | Auto-discover public SearXNG instances from `searx.space` when `SEARXNG_BASE_URLS` is empty (default `true`) | Optional |
 | `TUSHARE_TOKEN` | [Tushare Pro](https://tushare.pro/weborder/#/login?reg=834638) Token | Optional |
 | `TICKFLOW_API_KEY` | [TickFlow](https://tickflow.org) API key for optional A-share daily K-lines, realtime quotes, stock list/name lookup, and CN market review enhancement; permission or entitlement failures fall back to existing providers | Optional |
+
+> **GitHub Actions:** The bundled `00-daily-analysis.yml` maps `TUSHARE_TOKEN`, `TICKFLOW_API_KEY` / `TICKFLOW_*`, and the documented `LONGBRIDGE_*` variables into the job environment. Store `TICKFLOW_API_KEY` in **Secrets**; non-sensitive TickFlow priority, adjustment, and batch switches can live in **Variables** or **Secrets**. Longbridge OAuth still requires a client id plus `LONGBRIDGE_OAUTH_TOKEN_CACHE_B64` for headless Actions runs, while the legacy `LONGBRIDGE_APP_KEY` / `LONGBRIDGE_APP_SECRET` / `LONGBRIDGE_ACCESS_TOKEN` triplet remains supported.
 
 #### ✅ Minimum Configuration Example
 
@@ -227,6 +229,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 
 > GitHub Actions note: the bundled `00-daily-analysis.yml` explicitly uses `litellm` when `GENERATION_FALLBACK_BACKEND` is not configured, so an unset Secret/Variable is not exported as an empty value that disables backend fallback. To disable backend fallback in Actions, set the fallback to the primary backend and let the resolver treat it as self no-op.
 
+> Generation backend status note: the Web settings quick check only reads config, drafts, and executable visibility; it does not send a real model request. JSON smoke test is a separate explicit action that sends one real request with a server-owned fixed JSON prompt/schema. `health_status` and `last_error_code/message` describe only the current status computation or smoke result, not persisted historical health.
+
 > *Note: Configure at least one of `ANSPIRE_API_KEYS`, `AIHUBMIX_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_BASE`, or `LLM_CHANNELS` / `LITELLM_CONFIG`. `ANSPIRE_API_KEYS` and `AIHUBMIX_KEY` are auto-adapted without an `OPENAI_BASE_URL`.
 
 ### Notification Channel Configuration
@@ -246,7 +250,7 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 | `DISCORD_BOT_TOKEN` | Discord Bot Token (choose one with Webhook) | Optional |
 | `DISCORD_MAIN_CHANNEL_ID` | Discord Channel ID (required when using Bot) | Optional |
 | `DISCORD_INTERACTIONS_PUBLIC_KEY` | Discord Public Key (required only for inbound Interaction/Webhook signature verification) | Optional |
-| `DISCORD_MAX_WORDS` | Discord Word Limit (default 2000 for un-upgraded servers) | Optional |
+| `DISCORD_MAX_WORDS` | Discord per-message content limit (default 2000; runtime never exceeds Discord's 2000-character content limit, long reports are chunked, and 429 rate limits are retried a limited number of times) | Optional |
 | `SLACK_BOT_TOKEN` | Slack Bot Token (recommended, supports image upload; takes priority over Webhook when both set) | Optional |
 | `SLACK_CHANNEL_ID` | Slack Channel ID (required when using Bot) | Optional |
 | `SLACK_WEBHOOK_URL` | Slack Incoming Webhook URL (text only, no image support) | Optional |
@@ -664,7 +668,7 @@ The phase labels describe regular-session state:
 | `premarket` | Before the regular session opens; does not mean extended-hours quotes were fetched |
 | `intraday` | Inside the regular session and outside lunch break or the near-close window |
 | `lunch_break` | Lunch break window supplied by the market calendar; markets without lunch breaks skip this phase |
-| `closing_auction` | Near-close heuristic window: 3 minutes for CN, 10 minutes for HK, and 5 minutes for US; this is not a full exchange auction model |
+| `closing_auction` | Near-close heuristic window: 3 minutes for CN, 10 minutes for HK, 5 minutes for US, and 5 minutes for TW (13:25–13:30); this is not a full exchange auction model |
 | `postmarket` | After the regular session closes; does not mean post-market quotes were fetched |
 | `non_trading` | The current market-local date is not a trading session |
 | `unknown` | Unknown market, calendar unavailable, or calendar error, so the phase cannot be inferred reliably |
@@ -979,6 +983,8 @@ while Gotify uses `/message` as a fixed server API.
 ### Discord
 
 Discord supports two push methods:
+
+Long reports are automatically split under Discord's 2000-character per-message `content` limit. If a chunk receives a 429 rate limit response, the sender follows Discord's `retry_after` or `Retry-After` value for a limited retry and continues attempting later chunks. `DISCORD_MAX_WORDS` can lower the chunk size, but runtime delivery will not exceed 2000.
 
 **Method 1: Webhook (Recommended, Simple)**
 
@@ -1491,7 +1497,7 @@ A: WeChat Work/Feishu have message length limits, system already auto-segments m
 A: AkShare uses scraping mechanism, may be temporarily rate-limited. System has retry mechanism configured, usually just wait a few minutes and retry.
 
 ### Q: How to add watchlist stocks?
-A: Modify `STOCK_LIST` environment variable, separate multiple codes with commas.
+A: Modify the `STOCK_LIST` environment variable. English commas are recommended between codes. Chinese commas, enumeration commas, semicolons, spaces, and newlines are also recognized and are normalized to English commas after saving in Web settings or using watchlist add/remove actions.
 
 ### Q: GitHub Actions not executing?
 A: Check if Actions is enabled, and if cron expression is correct (note it's UTC time).
@@ -1512,7 +1518,7 @@ A: Check if Actions is enabled, and if cron expression is correct (note it's UTC
 - The button calls the existing `POST /api/v1/portfolio/fx/refresh` endpoint and reloads snapshot/risk data only.
 - If upstream FX fetch fails, the page may still remain stale after refresh and will explain the fallback result inline.
 - When `PORTFOLIO_FX_UPDATE_ENABLED=false`, the refresh API returns an explicit disabled status and the page shows that online FX refresh is disabled instead of implying that no refreshable pairs exist.
-- Portfolio snapshot `positions[]` includes price metadata such as `price_source`, `price_date`, `price_stale`, and `price_available`. Today's snapshot tries realtime quotes first, then falls back to the latest historical close on or before `as_of` when the realtime quote is unavailable or non-positive. Historical `as_of` snapshots stay on historical-close semantics and no longer silently treat cost basis as the current price. Missing-price positions are marked with `price_available=false` and excluded from market value / unrealized PnL totals.
+- Portfolio snapshot `positions[]` includes price metadata such as `price_source`, `price_date`, `price_stale`, and `price_available`. Today's snapshot tries realtime quotes by default, then falls back to the latest historical close on or before `as_of` when the realtime quote is unavailable or non-positive. Passing `include_realtime=false` skips realtime quotes and uses the local historical-close fallback path directly; the Web portfolio page uses this mode to render holdings before slow external realtime quote sources can block the first screen. Historical `as_of` snapshots stay on historical-close semantics and no longer silently treat cost basis as the current price. Missing-price positions are marked with `price_available=false` and excluded from market value / unrealized PnL totals.
 
 ## Agent Tool Data Cache And Persistence
 
